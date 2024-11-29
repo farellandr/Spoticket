@@ -7,7 +7,7 @@ import (
 )
 
 type ErrorResponse struct {
-	Error  string `json:"error"`  
+	Error   string `json:"error"`
 	Message string `json:"message"`
 }
 
@@ -17,7 +17,7 @@ func HTTPStatusText(code int) string {
 
 func RespondWithError(c *gin.Context, statusCode int, customMessage string) {
 	c.JSON(statusCode, ErrorResponse{
-		Error:  HTTPStatusText(statusCode),
+		Error:   HTTPStatusText(statusCode),
 		Message: customMessage,
 	})
 }

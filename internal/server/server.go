@@ -35,16 +35,25 @@ func Start() error {
 
 func setupRoutes(r *gin.Engine, db *gorm.DB) {
 	r.Use(middleware.DatabaseMiddleware(db))
-	
+
 	public := r.Group("/v1")
 	{
 		public.POST("/register", handlers.Register)
 		public.POST("/login", handlers.Login)
+
+		// event := public.Group("/event")
+		// {
+		//
+		// }
+
 	}
 
 	protected := r.Group("/v1")
 	protected.Use(middleware.JWTAuthMiddleware())
 	{
-		// protected routes here
+		event := protected.Group("/event")
+		{
+			event.POST("/", handlers.CreateEvent)
+		}
 	}
 }
