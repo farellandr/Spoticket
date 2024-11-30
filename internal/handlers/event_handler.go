@@ -21,13 +21,18 @@ type EventRequest struct {
 	District    string    `json:"district" binding:"required"`
 	SubDistrict string    `json:"sub_district" binding:"required"`
 	Location    string    `json:"location" binding:"required"`
-	UserId      uuid.UUID `json:"user_id" binding:"required"`
 }
 
 func CreateEvent(c *gin.Context) {
 	var req EventRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		helpers.RespondWithError(c, http.StatusBadRequest, "Invalid input. Please check your fields.")
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		helpers.RespondWithError(c, http.StatusUnauthorized, "User ID not found in token.")
 		return
 	}
 
@@ -39,7 +44,7 @@ func CreateEvent(c *gin.Context) {
 	gormDB := db.(*gorm.DB)
 
 	var user models.User
-	if err := gormDB.Where("id = ?", req.UserId).First(&user).Error; err != nil {
+	if err := gormDB.Where("id = ?", userID).First(&user).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			helpers.RespondWithError(c, http.StatusNotFound, "User not found.")
 			return
