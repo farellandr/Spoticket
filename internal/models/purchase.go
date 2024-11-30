@@ -16,7 +16,7 @@ type Purchase struct {
 	UserID    uuid.UUID `gorm:"type:uuid;not null;index"`
 	User      User      `gorm:"foreignKey:UserID"`
 	PaymentID uuid.UUID `gorm:"type:uuid;not null;index"`
-	Payment   Payment   `gorm:"foreignKey:PaymentID"`
+	Payment   Payment   `gorm:"foreignKey:PaymentID;constraint:OnDelete:CASCADE"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`

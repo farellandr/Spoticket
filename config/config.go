@@ -27,6 +27,10 @@ func LoadConfig() (*Config, error) {
 	}, nil
 }
 
+func enableUUIDExtension(db *gorm.DB) error {
+	return db.Exec("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"").Error
+}
+
 func InitDatabase(cfg *Config) (*gorm.DB, error) {
 	dsn := fmt.Sprintf(
 		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
@@ -38,7 +42,11 @@ func InitDatabase(cfg *Config) (*gorm.DB, error) {
 		return nil, err
 	}
 
-	err = db.AutoMigrate(&models.Role{}, &models.User{}, &models.Event{}, &models.Ticket{}, &models.Purchase{}, &models.Payment{})
+	if err := enableUUIDExtension(db); err != nil {
+		return nil, err
+	}
+
+	err = db.AutoMigrate(&models.Role{}, &models.User{}, &models.Event{}, &models.Ticket{}, &models.Purchase{}, &models.Payment{}, &models.Category{}, &models.Coupon{}, &models.UserCoupon{})
 	if err != nil {
 		return nil, err
 	}

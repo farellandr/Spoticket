@@ -12,8 +12,9 @@ type Ticket struct {
 	Type      string    `gorm:"not null"`
 	Price     int       `gorm:"not null"`
 	Limit     *int
-	EventID   uuid.UUID `gorm:"type:uuid;not null;index"`
-	Event     Event     `gorm:"foreignKey:EventID"`
+	EventID   uuid.UUID  `gorm:"type:uuid;not null;index"`
+	Event     Event      `gorm:"foreignKey:EventID"`
+	Purchases []Purchase `gorm:"foreignKey:TicketID"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`
