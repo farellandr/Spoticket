@@ -1,23 +1,20 @@
 package models
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type Ticket struct {
-	gorm.Model
-	ID      uuid.UUID `gorm:"type:uuid;primary_key"`
-	Type    string    `gorm:"not null"`
-	Price   int       `gorm:"not null"`
-	Limit   *int
-	EventID uuid.UUID
-	Event   Event
-}
-
-func (ticket *Ticket) BeforeCreate(tx *gorm.DB) (err error) {
-	if ticket.ID == uuid.Nil {
-		ticket.ID = uuid.New()
-	}
-	return
+	ID        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primary_key"`
+	Type      string    `gorm:"not null"`
+	Price     int       `gorm:"not null"`
+	Limit     *int
+	EventID   uuid.UUID `gorm:"type:uuid;not null;index"`
+	Event     Event     `gorm:"foreignKey:EventID"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 }

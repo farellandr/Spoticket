@@ -41,19 +41,21 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 		public.POST("/register", handlers.Register)
 		public.POST("/login", handlers.Login)
 
-		// event := public.Group("/event")
-		// {
-		//
-		// }
-
+		eventPublic := public.Group("/events")
+		{
+			eventPublic.GET("", handlers.ListEvents)
+			eventPublic.GET("/:id", handlers.GetEvent)
+		}
 	}
 
 	protected := r.Group("/v1")
 	protected.Use(middleware.JWTAuthMiddleware())
 	{
-		event := protected.Group("/event")
+		eventProtected := protected.Group("/events")
 		{
-			event.POST("/", handlers.CreateEvent)
+			eventProtected.POST("", handlers.CreateEvent)
+			eventProtected.PUT("/:id", handlers.UpdateEvent)
+			eventProtected.DELETE("/:id", handlers.DeleteEvent)
 		}
 	}
 }

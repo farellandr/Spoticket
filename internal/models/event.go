@@ -8,8 +8,7 @@ import (
 )
 
 type Event struct {
-	gorm.Model
-	ID          uuid.UUID `gorm:"type:uuid;primary_key"`
+	ID          uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primary_key"`
 	Title       string    `gorm:"not null"`
 	Description string    `gorm:"not null"`
 	StartTime   time.Time `gorm:"not null"`
@@ -19,13 +18,9 @@ type Event struct {
 	District    string    `gorm:"not null"`
 	SubDistrict string    `gorm:"not null"`
 	Location    string    `gorm:"not null"`
-	User        User
-	UserID      uuid.UUID
-}
-
-func (event *Event) BeforeCreate(tx *gorm.DB) (err error) {
-	if event.ID == uuid.Nil {
-		event.ID = uuid.New()
-	}
-	return
+	UserID      uuid.UUID `gorm:"type:uuid;not null;index"`
+	User        User      `gorm:"foreignKey:UserID"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }

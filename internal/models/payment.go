@@ -1,24 +1,21 @@
 package models
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type Payment struct {
-	gorm.Model
-	ID            uuid.UUID `gorm:"type:uuid;primary_key"`
+	ID            uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primary_key"`
 	Amount        int       `gorm:"not null"`
 	Method        string    `gorm:"not null"`
 	Status        string    `gorm:"not null;default:'pending'"`
-	TransactionId string    `gorm:"not null"`
-	UserId        uuid.UUID
-	User          User
-}
-
-func (payment *Payment) BeforeCreate(tx *gorm.DB) (err error) {
-	if payment.ID == uuid.Nil {
-		payment.ID = uuid.New()
-	}
-	return
+	TransactionID string    `gorm:"not null"`
+	UserID        uuid.UUID `gorm:"type:uuid;not null;index"`
+	User          User      `gorm:"foreignKey:UserID"`
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	DeletedAt     gorm.DeletedAt `gorm:"index"`
 }
