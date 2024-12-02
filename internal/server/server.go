@@ -51,6 +51,11 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 			eventPublic.GET("", handlers.ListEvents)
 			eventPublic.GET("/:id", handlers.GetEvent)
 		}
+
+		ticketPublic := public.Group("/tickets")
+		{
+			ticketPublic.GET("/:id", handlers.GetTicket)
+		}
 	}
 
 	protected := r.Group("/v1")

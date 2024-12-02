@@ -21,6 +21,7 @@ type EventRequest struct {
 	District    string    `json:"district" binding:"required"`
 	SubDistrict string    `json:"sub_district" binding:"required"`
 	Location    string    `json:"location" binding:"required"`
+	Categories  []string  `json:"categories" binding:"required"`
 }
 
 func CreateEvent(c *gin.Context) {
@@ -53,6 +54,16 @@ func CreateEvent(c *gin.Context) {
 		return
 	}
 
+	var categories []models.Category
+	for _, categoryName := range req.Categories {
+		var category models.Category
+		if err := gormDB.Where("name = ?", categoryName).FirstOrCreate(&category, models.Category{Name: categoryName}).Error; err != nil {
+			helpers.RespondWithError(c, http.StatusInternalServerError, "Error processing categories.")
+			return
+		}
+		categories = append(categories, category)
+	}
+
 	event := models.Event{
 		ID:          uuid.New(),
 		Title:       req.Title,
@@ -65,6 +76,7 @@ func CreateEvent(c *gin.Context) {
 		SubDistrict: req.SubDistrict,
 		Location:    req.Location,
 		UserID:      user.ID,
+		Categories:  categories,
 	}
 
 	if err := gormDB.Create(&event).Error; err != nil {
@@ -89,7 +101,7 @@ func GetEvent(c *gin.Context) {
 	gormDB := db.(*gorm.DB)
 
 	var event models.Event
-	if err := gormDB.Preload("User").Preload("Tickets.Purchases").Where("id = ?", eventID).First(&event).Error; err != nil {
+	if err := gormDB.Preload("Categories").Preload("User").Preload("Tickets.Purchases").Where("id = ?", eventID).First(&event).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			helpers.RespondWithError(c, http.StatusNotFound, "Event not found.")
 			return
@@ -144,7 +156,7 @@ func ListEvents(c *gin.Context) {
 
 	var events []models.Event
 	offset := (pageNum - 1) * limitNum
-	err = query.Preload("User").Preload("Tickets").Offset(offset).Limit(limitNum).Order("created_at DESC").Find(&events).Error
+	err = query.Preload("Categories").Preload("User").Preload("Tickets").Offset(offset).Limit(limitNum).Order("created_at DESC").Find(&events).Error
 	if err != nil {
 		helpers.RespondWithError(c, http.StatusInternalServerError, "Error retrieving events.")
 		return
@@ -181,7 +193,7 @@ func UpdateEvent(c *gin.Context) {
 	gormDB := db.(*gorm.DB)
 
 	var event models.Event
-	if err := gormDB.Where("id = ? AND user_id = ?", eventID, userID).First(&event).Error; err != nil {
+	if err := gormDB.Preload("User").Where("id = ? AND user_id = ?", eventID, userID).First(&event).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			helpers.RespondWithError(c, http.StatusForbidden, "Event not found or you don't have permission to update.")
 			return
@@ -200,8 +212,23 @@ func UpdateEvent(c *gin.Context) {
 	event.SubDistrict = req.SubDistrict
 	event.Location = req.Location
 
+	var updatedCategories []models.Category
+	for _, categoryName := range req.Categories {
+		var category models.Category
+		if err := gormDB.Where("name = ?", categoryName).FirstOrCreate(&category, models.Category{Name: categoryName}).Error; err != nil {
+			helpers.RespondWithError(c, http.StatusInternalServerError, "Error processing categories.")
+			return
+		}
+		updatedCategories = append(updatedCategories, category)
+	}
+
 	if err := gormDB.Save(&event).Error; err != nil {
 		helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to update event.")
+		return
+	}
+
+	if err := gormDB.Model(&event).Association("Categories").Replace(updatedCategories); err != nil {
+		helpers.RespondWithError(c, http.StatusInternalServerError, "Error updating categories.")
 		return
 	}
 

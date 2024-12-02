@@ -66,7 +66,7 @@ func CreateTicket(c *gin.Context) {
 	})
 }
 
-func ListTickets(c *gin.Context) {
+func GetTicket(c *gin.Context) {
 	ticketID := c.Param("id")
 
 	db, exists := c.Get("db")
@@ -76,13 +76,17 @@ func ListTickets(c *gin.Context) {
 	}
 	gormDB := db.(*gorm.DB)
 
-	var tickets []models.Ticket
-	if err := gormDB.Where("id = ?", ticketID).Find(&tickets).Error; err != nil {
-		helpers.RespondWithError(c, http.StatusInternalServerError, "Error retrieving tickets.")
+	var ticket models.Ticket
+	if err := gormDB.Where("id = ?", ticketID).First(&ticket).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			helpers.RespondWithError(c, http.StatusNotFound, "Ticket not found.")
+			return
+		}
+		helpers.RespondWithError(c, http.StatusInternalServerError, "Error retrieving ticket.")
 		return
 	}
 
-	c.JSON(http.StatusOK, tickets)
+	c.JSON(http.StatusOK, ticket)
 }
 
 func UpdateTicket(c *gin.Context) {
