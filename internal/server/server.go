@@ -41,6 +41,11 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 		public.POST("/register", handlers.Register)
 		public.POST("/login", handlers.Login)
 
+		categoryPublic := public.Group("/categories")
+		{
+			categoryPublic.GET("", handlers.ListCategories)
+		}
+
 		eventPublic := public.Group("/events")
 		{
 			eventPublic.GET("", handlers.ListEvents)
@@ -51,11 +56,25 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 	protected := r.Group("/v1")
 	protected.Use(middleware.JWTAuthMiddleware())
 	{
+		categoryProtected := protected.Group("/categories")
+		{
+			categoryProtected.POST("", handlers.CreateCategory)
+			categoryProtected.PUT("/:id", handlers.UpdateCategory)
+			categoryProtected.DELETE("/:id", handlers.DeleteCategory)
+		}
+
 		eventProtected := protected.Group("/events")
 		{
 			eventProtected.POST("", handlers.CreateEvent)
 			eventProtected.PUT("/:id", handlers.UpdateEvent)
 			eventProtected.DELETE("/:id", handlers.DeleteEvent)
+		}
+
+		ticketProtected := protected.Group("/tickets")
+		{
+			ticketProtected.POST("", handlers.CreateTicket)
+			ticketProtected.PUT("/:id", handlers.UpdateTicket)
+			ticketProtected.DELETE("/:id", handlers.DeleteTicket)
 		}
 	}
 }

@@ -16,9 +16,11 @@ import (
 )
 
 type RegisterRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
-	RoleName string `json:"role_name" binding:"required"`
+	Email       string `json:"email" binding:"required,email"`
+	Password    string `json:"password" binding:"required,min=6"`
+	Name        string `json:"name" binding:"required"`
+	PhoneNumber string `json:"phone_number" binding:"required,min=10,max=13"`
+	RoleName    string `json:"role_name" binding:"required"`
 }
 
 type LoginRequest struct {
@@ -59,10 +61,12 @@ func Register(c *gin.Context) {
 	}
 
 	user := models.User{
-		ID:       uuid.New(),
-		Email:    req.Email,
-		Password: string(hashedPassword),
-		RoleID:   role.ID,
+		ID:          uuid.New(),
+		Email:       req.Email,
+		Name:        req.Name,
+		PhoneNumber: req.PhoneNumber,
+		Password:    string(hashedPassword),
+		RoleID:      role.ID,
 	}
 
 	if err := gormDB.Create(&user).Error; err != nil {

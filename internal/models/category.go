@@ -9,7 +9,7 @@ import (
 
 type Category struct {
 	ID        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primary_key"`
-	Name      string    `gorm:"not null"`
+	Name      string    `gorm:"not null;unique"`
 	Events    []Event   `gorm:"many2many:event_categories;"`
 	CreatedAt time.Time
 	UpdatedAt time.Time

@@ -89,7 +89,7 @@ func GetEvent(c *gin.Context) {
 	gormDB := db.(*gorm.DB)
 
 	var event models.Event
-	if err := gormDB.Preload("User.Role").Where("id = ?", eventID).First(&event).Error; err != nil {
+	if err := gormDB.Preload("User").Preload("Tickets.Purchases").Where("id = ?", eventID).First(&event).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			helpers.RespondWithError(c, http.StatusNotFound, "Event not found.")
 			return
@@ -144,7 +144,7 @@ func ListEvents(c *gin.Context) {
 
 	var events []models.Event
 	offset := (pageNum - 1) * limitNum
-	err = query.Preload("User.Role").Offset(offset).Limit(limitNum).Find(&events).Error
+	err = query.Preload("User").Preload("Tickets").Offset(offset).Limit(limitNum).Order("created_at DESC").Find(&events).Error
 	if err != nil {
 		helpers.RespondWithError(c, http.StatusInternalServerError, "Error retrieving events.")
 		return
