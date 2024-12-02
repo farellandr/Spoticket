@@ -9,8 +9,10 @@ import (
 
 type Coupon struct {
 	ID        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primary_key"`
-	Code      string    `gorm:"not null;unique"`
+	Name      string    `gorm:"not null"`
+	Code      *string   `gorm:"unique"`
 	Discount  int       `gorm:"not null"`
+	Limit     int       `gorm:"not null"`
 	Users     []User    `gorm:"many2many:user_coupons;"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
