@@ -56,11 +56,19 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 		{
 			ticketPublic.GET("/:id", handlers.GetTicket)
 		}
+
+		couponPublic := public.Group("/coupons")
+		{
+			couponPublic.GET("", handlers.ListCoupons)
+			couponPublic.GET("/:id", handlers.GetCoupon)
+		}
 	}
 
 	protected := r.Group("/v1")
 	protected.Use(middleware.JWTAuthMiddleware())
 	{
+		protected.GET("/profile", handlers.GetProfile)
+
 		categoryProtected := protected.Group("/categories")
 		{
 			categoryProtected.POST("", handlers.CreateCategory)
@@ -80,6 +88,14 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 			ticketProtected.POST("", handlers.CreateTicket)
 			ticketProtected.PUT("/:id", handlers.UpdateTicket)
 			ticketProtected.DELETE("/:id", handlers.DeleteTicket)
+		}
+
+		couponProtected := protected.Group("/coupons")
+		{
+			couponProtected.POST("", handlers.CreateCoupon)
+			couponProtected.POST("/claim", handlers.ClaimCoupon)
+			couponProtected.PUT("/:id", handlers.UpdateCoupon)
+			couponProtected.DELETE("/:id", handlers.DeleteCoupon)
 		}
 	}
 }

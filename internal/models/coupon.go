@@ -8,15 +8,18 @@ import (
 )
 
 type Coupon struct {
-	ID        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primary_key"`
-	Name      string    `gorm:"not null"`
-	Code      *string   `gorm:"unique"`
-	Discount  int       `gorm:"not null"`
-	Limit     int       `gorm:"not null"`
-	Users     []User    `gorm:"many2many:user_coupons;"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"index"`
+	ID          uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primary_key"`
+	Name        string    `gorm:"not null"`
+	Code        *string   `gorm:"unique"`
+	Limit       int       `gorm:"not null"`
+	Discount    int       `gorm:"not null"`
+	Description *string
+	ValidAt     time.Time `gorm:"not null"`
+	ExpiredAt   time.Time `gorm:"not null"`
+	Users       []User    `gorm:"many2many:user_coupons;"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
 
 type UserCoupon struct {

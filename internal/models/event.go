@@ -19,7 +19,7 @@ type Event struct {
 	SubDistrict string     `gorm:"not null"`
 	Location    string     `gorm:"not null"`
 	UserID      uuid.UUID  `gorm:"type:uuid;not null;index"`
-	User        User       `gorm:"foreignKey:UserID"`
+	User        *User      `gorm:"foreignKey:UserID"`
 	Categories  []Category `gorm:"many2many:event_categories;"`
 	Tickets     []Ticket   `gorm:"foreignKey:EventID"`
 	CreatedAt   time.Time
