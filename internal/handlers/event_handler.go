@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -11,23 +12,40 @@ import (
 	"gorm.io/gorm"
 )
 
-type EventRequest struct {
-	Title       string    `json:"title" binding:"required"`
-	Description string    `json:"description" binding:"required"`
-	StartTime   time.Time `json:"start_time" binding:"required"`
-	EndTime     time.Time `json:"end_time" binding:"required"`
-	Province    string    `json:"province" binding:"required"`
-	City        string    `json:"city" binding:"required"`
-	District    string    `json:"district" binding:"required"`
-	SubDistrict string    `json:"sub_district" binding:"required"`
-	Location    string    `json:"location" binding:"required"`
-	Categories  []string  `json:"categories" binding:"required"`
-}
-
 func CreateEvent(c *gin.Context) {
-	var req EventRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		helpers.RespondWithError(c, http.StatusBadRequest, "Invalid input. Please check your fields.")
+	title := c.PostForm("title")
+	description := c.PostForm("description")
+
+	startTimeStr := c.PostForm("start_time")
+	endTimeStr := c.PostForm("end_time")
+	startTime, err := time.Parse(time.RFC3339, startTimeStr)
+	if err != nil {
+		helpers.RespondWithError(c, http.StatusBadRequest, "Invalid start time format.")
+		return
+	}
+	endTime, err := time.Parse(time.RFC3339, endTimeStr)
+	if err != nil {
+		helpers.RespondWithError(c, http.StatusBadRequest, "Invalid end time format.")
+		return
+	}
+
+	province := c.PostForm("province")
+	city := c.PostForm("city")
+	district := c.PostForm("district")
+	subDistrict := c.PostForm("sub_district")
+	location := c.PostForm("location")
+
+	var categories []string
+	for i := 0; ; i++ {
+		category := c.PostForm(fmt.Sprintf("categories[%d]", i))
+		if category == "" {
+			break
+		}
+		categories = append(categories, category)
+	}
+
+	if title == "" || description == "" || len(categories) == 0 {
+		helpers.RespondWithError(c, http.StatusBadRequest, "Missing required fields.")
 		return
 	}
 
@@ -46,37 +64,43 @@ func CreateEvent(c *gin.Context) {
 
 	var user models.User
 	if err := gormDB.Where("id = ?", userID).First(&user).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			helpers.RespondWithError(c, http.StatusNotFound, "User not found.")
-			return
-		}
-		helpers.RespondWithError(c, http.StatusInternalServerError, "Error checking user.")
+		helpers.RespondWithError(c, http.StatusNotFound, "User not found.")
 		return
 	}
 
-	var categories []models.Category
-	for _, categoryName := range req.Categories {
+	var eventCategories []models.Category
+	for _, categoryName := range categories {
 		var category models.Category
 		if err := gormDB.Where("name = ?", categoryName).FirstOrCreate(&category, models.Category{Name: categoryName}).Error; err != nil {
 			helpers.RespondWithError(c, http.StatusInternalServerError, "Error processing categories.")
 			return
 		}
-		categories = append(categories, category)
+		eventCategories = append(eventCategories, category)
 	}
 
 	event := models.Event{
 		ID:          uuid.New(),
-		Title:       req.Title,
-		Description: req.Description,
-		StartTime:   req.StartTime,
-		EndTime:     req.EndTime,
-		Province:    req.Province,
-		City:        req.City,
-		District:    req.District,
-		SubDistrict: req.SubDistrict,
-		Location:    req.Location,
+		Title:       title,
+		Description: description,
+		StartTime:   startTime,
+		EndTime:     endTime,
+		Province:    province,
+		City:        city,
+		District:    district,
+		SubDistrict: subDistrict,
+		Location:    location,
 		UserID:      user.ID,
-		Categories:  categories,
+		Categories:  eventCategories,
+	}
+
+	bannerFile, err := c.FormFile("banner")
+	if err == nil {
+		bannerPath, err := helpers.UploadFile(c, bannerFile, "event_banners")
+		if err != nil {
+			helpers.RespondWithError(c, http.StatusBadRequest, err.Error())
+			return
+		}
+		event.BannerPath = bannerPath
 	}
 
 	if err := gormDB.Create(&event).Error; err != nil {
@@ -179,9 +203,39 @@ func UpdateEvent(c *gin.Context) {
 		return
 	}
 
-	var req EventRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		helpers.RespondWithError(c, http.StatusBadRequest, "Invalid input. Please check your fields.")
+	title := c.PostForm("title")
+	description := c.PostForm("description")
+
+	startTimeStr := c.PostForm("start_time")
+	endTimeStr := c.PostForm("end_time")
+	startTime, err := time.Parse(time.RFC3339, startTimeStr)
+	if err != nil {
+		helpers.RespondWithError(c, http.StatusBadRequest, "Invalid start time format.")
+		return
+	}
+	endTime, err := time.Parse(time.RFC3339, endTimeStr)
+	if err != nil {
+		helpers.RespondWithError(c, http.StatusBadRequest, "Invalid end time format.")
+		return
+	}
+
+	province := c.PostForm("province")
+	city := c.PostForm("city")
+	district := c.PostForm("district")
+	subDistrict := c.PostForm("sub_district")
+	location := c.PostForm("location")
+
+	var categories []string
+	for i := 0; ; i++ {
+		category := c.PostForm(fmt.Sprintf("categories[%d]", i))
+		if category == "" {
+			break
+		}
+		categories = append(categories, category)
+	}
+
+	if title == "" || description == "" || len(categories) == 0 {
+		helpers.RespondWithError(c, http.StatusBadRequest, "Missing required fields.")
 		return
 	}
 
@@ -202,18 +256,32 @@ func UpdateEvent(c *gin.Context) {
 		return
 	}
 
-	event.Title = req.Title
-	event.Description = req.Description
-	event.StartTime = req.StartTime
-	event.EndTime = req.EndTime
-	event.Province = req.Province
-	event.City = req.City
-	event.District = req.District
-	event.SubDistrict = req.SubDistrict
-	event.Location = req.Location
+	event.Title = title
+	event.Description = description
+	event.StartTime = startTime
+	event.EndTime = endTime
+	event.Province = province
+	event.City = city
+	event.District = district
+	event.SubDistrict = subDistrict
+	event.Location = location
+
+	bannerFile, err := c.FormFile("banner")
+	if err == nil {
+		bannerPath, err := helpers.UploadFile(c, bannerFile, "event_banners")
+
+		if err := helpers.DeleteFile(event.BannerPath); err != nil {
+			fmt.Printf("Error deleting old banner: %v\n", err)
+		}
+		if err != nil {
+			helpers.RespondWithError(c, http.StatusBadRequest, err.Error())
+			return
+		}
+		event.BannerPath = bannerPath
+	}
 
 	var updatedCategories []models.Category
-	for _, categoryName := range req.Categories {
+	for _, categoryName := range categories {
 		var category models.Category
 		if err := gormDB.Where("name = ?", categoryName).FirstOrCreate(&category, models.Category{Name: categoryName}).Error; err != nil {
 			helpers.RespondWithError(c, http.StatusInternalServerError, "Error processing categories.")

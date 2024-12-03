@@ -22,6 +22,7 @@ type Event struct {
 	User        *User      `gorm:"foreignKey:UserID"`
 	Categories  []Category `gorm:"many2many:event_categories;"`
 	Tickets     []Ticket   `gorm:"foreignKey:EventID"`
+	BannerPath  string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
