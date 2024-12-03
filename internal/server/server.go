@@ -97,5 +97,10 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 			couponProtected.PUT("/:id", handlers.UpdateCoupon)
 			couponProtected.DELETE("/:id", handlers.DeleteCoupon)
 		}
+
+		paymentProtected := protected.Group("/payments")
+		{
+			paymentProtected.POST("", handlers.CreatePaymentLink)
+		}
 	}
 }
