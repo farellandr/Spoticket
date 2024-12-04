@@ -240,7 +240,7 @@ func PaymentNotification(c *gin.Context) {
 			return
 		}
 
-		transactionID, ok := notificationPayload["virtual_account_payment"].(map[string]interface{})["identifier"].([]interface{})[0].(map[string]interface{})["value"].(string)
+		transactionID, ok := notificationPayload["order"].(map[string]interface{})["invoice_number"].(string)
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "Unable to extract transaction ID",
