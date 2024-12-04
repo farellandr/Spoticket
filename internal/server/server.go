@@ -50,6 +50,7 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 		{
 			eventPublic.GET("", handlers.ListEvents)
 			eventPublic.GET("/:id", handlers.GetEvent)
+			eventPublic.GET("/:id/banner", handlers.StreamEventBanner)
 		}
 
 		ticketPublic := public.Group("/tickets")

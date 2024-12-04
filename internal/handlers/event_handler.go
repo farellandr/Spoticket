@@ -137,6 +137,34 @@ func GetEvent(c *gin.Context) {
 	c.JSON(http.StatusOK, event)
 }
 
+func StreamEventBanner(c *gin.Context) {
+	eventID := c.Param("id")
+
+	db, exists := c.Get("db")
+	if !exists {
+		helpers.RespondWithError(c, http.StatusInternalServerError, "Database connection not found.")
+		return
+	}
+	gormDB := db.(*gorm.DB)
+
+	var event models.Event
+	if err := gormDB.Where("id = ?", eventID).First(&event).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			helpers.RespondWithError(c, http.StatusNotFound, "Event not found.")
+			return
+		}
+		helpers.RespondWithError(c, http.StatusInternalServerError, "Error retrieving event.")
+		return
+	}
+
+	if event.BannerPath == "" {
+		helpers.RespondWithError(c, http.StatusNotFound, "No banner found for this event.")
+		return
+	}
+
+	c.File(event.BannerPath)
+}
+
 func ListEvents(c *gin.Context) {
 	db, exists := c.Get("db")
 	if !exists {
