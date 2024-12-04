@@ -14,7 +14,7 @@ type Payment struct {
 	Status        string    `gorm:"not null;default:'pending'"`
 	TransactionID string    `gorm:"not null"`
 	UserID        uuid.UUID `gorm:"type:uuid;not null;index"`
-	User          User      `gorm:"foreignKey:UserID"`
+	User          *User     `gorm:"foreignKey:UserID"`
 	Purchase      *Purchase `gorm:"foreignKey:PaymentID"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time

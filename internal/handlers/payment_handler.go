@@ -96,6 +96,11 @@ func CreatePaymentLink(c *gin.Context) {
 			"phone": user.PhoneNumber,
 			"email": user.Email,
 		},
+		"additional_info": map[string]interface{}{
+			"override_notification_url": fmt.Sprintf("https://f209kkb4-3222.asse.devtunnels.ms/v1/payments/notification?userId=%s&ticketId=%s",
+				userUUID.String(),
+				ticket.ID.String()),
+		},
 	}
 
 	jsonBody, err := json.Marshal(paymentBody)
@@ -154,5 +159,140 @@ func CreatePaymentLink(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"payment_url": paymentURL,
+	})
+}
+
+func PaymentNotification(c *gin.Context) {
+	userIDStr := c.Query("userId")
+	ticketIDStr := c.Query("ticketId")
+
+	userUUID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid user ID",
+		})
+		return
+	}
+
+	ticketID, err := uuid.Parse(ticketIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid ticket ID",
+		})
+		return
+	}
+
+	var notificationPayload map[string]interface{}
+	if err := c.ShouldBindJSON(&notificationPayload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid notification payload",
+		})
+		return
+	}
+
+	transactionStatus, ok := notificationPayload["transaction"].(map[string]interface{})["status"].(string)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Unable to extract transaction status",
+		})
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Database connection not found",
+		})
+		return
+	}
+	gormDB := db.(*gorm.DB)
+
+	var user models.User
+	if err := gormDB.First(&user, userUUID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "User not found",
+		})
+		return
+	}
+
+	var ticket models.Ticket
+	if err := gormDB.First(&ticket, ticketID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Ticket not found",
+		})
+		return
+	}
+
+	if transactionStatus == "SUCCESS" {
+		orderInfo, ok := notificationPayload["order"].(map[string]interface{})
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Unable to extract order information",
+			})
+			return
+		}
+
+		amount, ok := orderInfo["amount"].(float64)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Unable to extract payment amount",
+			})
+			return
+		}
+
+		transactionID, ok := notificationPayload["virtual_account_payment"].(map[string]interface{})["identifier"].([]interface{})[0].(map[string]interface{})["value"].(string)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Unable to extract transaction ID",
+			})
+			return
+		}
+
+		paymentMethod, ok := notificationPayload["channel"].(map[string]interface{})["id"].(string)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Unable to extract payment method",
+			})
+			return
+		}
+
+		payment := models.Payment{
+			Amount:        int(amount),
+			Method:        paymentMethod,
+			Status:        transactionStatus,
+			TransactionID: transactionID,
+			UserID:        userUUID,
+		}
+
+		purchase := models.Purchase{
+			Total:    int(amount),
+			TicketID: ticketID,
+			UserID:   userUUID,
+			IsUsed:   false,
+		}
+
+		err = gormDB.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(&payment).Error; err != nil {
+				return err
+			}
+
+			purchase.PaymentID = payment.ID
+			if err := tx.Create(&purchase).Error; err != nil {
+				return err
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to create payment and purchase",
+			})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Notification processed successfully",
 	})
 }

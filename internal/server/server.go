@@ -62,6 +62,11 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 			couponPublic.GET("", handlers.ListCoupons)
 			couponPublic.GET("/:id", handlers.GetCoupon)
 		}
+
+		paymentPublic := public.Group("/payments")
+		{
+			paymentPublic.POST("/notification", handlers.PaymentNotification)
+		}
 	}
 
 	protected := r.Group("/v1")
