@@ -66,7 +66,37 @@ func CreatePaymentLink(c *gin.Context) {
 	}
 	categoriesStr := strings.Join(categoryNames, ",")
 
-	totalAmount := int64(ticket.Price * paymentReq.Quantity)
+	totalAmount := int(ticket.Price * paymentReq.Quantity)
+	var appliedCoupon int
+
+	if paymentReq.CouponID != nil {
+		var coupon models.Coupon
+		if err := gormDB.First(&coupon, paymentReq.CouponID).Error; err != nil {
+			helpers.RespondWithError(c, http.StatusNotFound, "Coupon not found.")
+			return
+		}
+
+		now := time.Now()
+		if now.Before(coupon.ValidAt) || now.After(coupon.ExpiredAt) {
+			helpers.RespondWithError(c, http.StatusBadRequest, "Coupon is not currently valid.")
+			return
+		}
+
+		var userCoupon models.UserCoupon
+		err := gormDB.Where("user_id = ? AND coupon_id = ?", userUUID, *paymentReq.CouponID).First(&userCoupon).Error
+		if err != nil {
+			helpers.RespondWithError(c, http.StatusBadRequest, "Coupon not claimed by user.")
+			return
+		}
+
+		if userCoupon.IsUsed {
+			helpers.RespondWithError(c, http.StatusBadRequest, "Coupon has already been used.")
+			return
+		}
+
+		appliedCoupon = int(coupon.Discount)
+		totalAmount = totalAmount * (100 - appliedCoupon) / 100
+	}
 
 	paymentBody := map[string]interface{}{
 		"order": map[string]interface{}{
@@ -81,7 +111,7 @@ func CreatePaymentLink(c *gin.Context) {
 					"id":       "001",
 					"name":     fmt.Sprintf("%s - %s", ticket.Event.Title, ticket.Type),
 					"quantity": paymentReq.Quantity,
-					"price":    int64(ticket.Price),
+					"price":    int(totalAmount / paymentReq.Quantity),
 					"category": categoriesStr,
 					"type":     ticket.Type,
 				},
@@ -97,9 +127,11 @@ func CreatePaymentLink(c *gin.Context) {
 			"email": user.Email,
 		},
 		"additional_info": map[string]interface{}{
-			"override_notification_url": fmt.Sprintf("https://f209kkb4-3222.asse.devtunnels.ms/v1/payments/notification?userId=%s&ticketId=%s",
+			"override_notification_url": fmt.Sprintf("https://f209kkb4-3222.asse.devtunnels.ms/v1/payments/notification?userId=%s&ticketId=%s&couponId=%s",
 				userUUID.String(),
-				ticket.ID.String()),
+				ticket.ID.String(),
+				paymentReq.CouponID,
+			),
 		},
 	}
 
@@ -165,6 +197,7 @@ func CreatePaymentLink(c *gin.Context) {
 func PaymentNotification(c *gin.Context) {
 	userIDStr := c.Query("userId")
 	ticketIDStr := c.Query("ticketId")
+	couponIDStr := c.Query("couponId")
 
 	userUUID, err := uuid.Parse(userIDStr)
 	if err != nil {
@@ -180,6 +213,14 @@ func PaymentNotification(c *gin.Context) {
 			"error": "Invalid ticket ID",
 		})
 		return
+	}
+
+	var couponID *uuid.UUID
+	if couponIDStr != "" {
+		parsedCouponID, err := uuid.Parse(couponIDStr)
+		if err == nil {
+			couponID = &parsedCouponID
+		}
 	}
 
 	var notificationPayload map[string]interface{}
@@ -256,19 +297,21 @@ func PaymentNotification(c *gin.Context) {
 			return
 		}
 
+		lineItems, ok := notificationPayload["additional_info"].(map[string]interface{})["line_items"].([]interface{})
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Unable to extract line items",
+			})
+			return
+		}
+
 		payment := models.Payment{
 			Amount:        int(amount),
 			Method:        paymentMethod,
 			Status:        transactionStatus,
 			TransactionID: transactionID,
 			UserID:        userUUID,
-		}
-
-		purchase := models.Purchase{
-			Total:    int(amount),
-			TicketID: ticketID,
-			UserID:   userUUID,
-			IsUsed:   false,
+			CouponID:      couponID,
 		}
 
 		err = gormDB.Transaction(func(tx *gorm.DB) error {
@@ -276,9 +319,37 @@ func PaymentNotification(c *gin.Context) {
 				return err
 			}
 
-			purchase.PaymentID = payment.ID
-			if err := tx.Create(&purchase).Error; err != nil {
-				return err
+			for _, item := range lineItems {
+				lineItem, ok := item.(map[string]interface{})
+				if !ok {
+					return fmt.Errorf("invalid line item format")
+				}
+
+				quantityFloat, ok := lineItem["quantity"].(float64)
+				if !ok {
+					return fmt.Errorf("unable to extract quantity")
+				}
+				quantity := int(quantityFloat)
+
+				for i := 0; i < quantity; i++ {
+					purchase := models.Purchase{
+						Total:     int(amount) / quantity,
+						TicketID:  ticketID,
+						UserID:    userUUID,
+						PaymentID: payment.ID,
+						IsUsed:    false,
+					}
+
+					if err := tx.Create(&purchase).Error; err != nil {
+						return err
+					}
+				}
+			}
+
+			if couponID != nil {
+				return tx.Model(&models.UserCoupon{}).
+					Where("user_id = ? AND coupon_id = ?", userUUID, *couponID).
+					Update("is_used", true).Error
 			}
 
 			return nil
@@ -286,7 +357,7 @@ func PaymentNotification(c *gin.Context) {
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to create payment and purchase",
+				"error": "Failed to create payment and purchases",
 			})
 			return
 		}
