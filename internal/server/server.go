@@ -94,6 +94,7 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 			ticketProtected.POST("", handlers.CreateTicket)
 			ticketProtected.PUT("/:id", handlers.UpdateTicket)
 			ticketProtected.DELETE("/:id", handlers.DeleteTicket)
+			ticketProtected.POST("/validate", handlers.ValidateTicket)
 		}
 
 		couponProtected := protected.Group("/coupons")
@@ -107,6 +108,11 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 		paymentProtected := protected.Group("/payments")
 		{
 			paymentProtected.POST("", handlers.CreatePaymentLink)
+		}
+
+		purchaseProtected := protected.Group("/purchases")
+		{
+			purchaseProtected.GET(":purchaseId/qr", handlers.GenerateTicketQR)
 		}
 	}
 }
