@@ -55,7 +55,7 @@ func GenerateTicketQR(c *gin.Context) {
 
 	qrData := generateQRCodeData(&purchase)
 
-	qrImage, err := qrcode.Encode(qrData, qrcode.Medium, 256)
+	qrImage, err := qrcode.Encode(qrData, qrcode.Medium, 1444)
 	if err != nil {
 		helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to generate QR code")
 		return
