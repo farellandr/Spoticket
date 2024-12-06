@@ -73,7 +73,11 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 	protected := r.Group("/v1")
 	protected.Use(middleware.JWTAuthMiddleware())
 	{
-		protected.GET("/profile", handlers.GetProfile)
+		profileProtected := protected.Group("/profile")
+		{
+			profileProtected.GET("", handlers.GetProfile)
+			profileProtected.PUT("/change-password", handlers.ChangePassword)
+		}
 
 		categoryProtected := protected.Group("/categories")
 		{
