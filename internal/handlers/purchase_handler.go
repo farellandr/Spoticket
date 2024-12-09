@@ -1,8 +1,12 @@
 package handlers
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/farellandr/spoticket/internal/helpers"
@@ -14,11 +18,41 @@ import (
 )
 
 func generateQRCodeData(purchase *models.Purchase) string {
-	return fmt.Sprintf("purchase:%s:ticket:%s:event:%s",
+	secretKey := os.Getenv("JWT_SECRET")
+	signature := generateSignature(purchase.ID, purchase.PaymentID, purchase.UserID, secretKey)
+	return fmt.Sprintf("purchase:%s;ticket:%s;event:%s;signature:%s",
 		purchase.ID.String(),
 		purchase.TicketID.String(),
 		purchase.Ticket.EventID.String(),
+		signature,
 	)
+}
+
+func generateSignature(purchaseID, paymentID, userID uuid.UUID, secretKey string) string {
+	data := fmt.Sprintf("%s:%s:%s", purchaseID.String(), paymentID.String(), userID.String())
+	h := hmac.New(sha256.New, []byte(secretKey))
+	h.Write([]byte(data))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func extractPurchaseIDFromQRData(qrData string) (uuid.UUID, error) {
+	parts := strings.Split(qrData, ";")
+	if len(parts) != 4 || !strings.HasPrefix(parts[0], "purchase:") || !strings.HasPrefix(parts[3], "signature:") {
+		return uuid.Nil, fmt.Errorf("invalid QR data format")
+	}
+	return uuid.Parse(strings.TrimPrefix(parts[0], "purchase:"))
+}
+
+func validateQRCodeSignature(purchase *models.Purchase, qrData string) bool {
+	parts := strings.Split(qrData, ";")
+	if len(parts) != 4 || !strings.HasPrefix(parts[3], "signature:") {
+		return false
+	}
+
+	secretKey := os.Getenv("JWT_SECRET")
+	signature := strings.TrimPrefix(parts[3], "signature:")
+	expectedSignature := generateSignature(purchase.ID, purchase.PaymentID, purchase.UserID, secretKey)
+	return hmac.Equal([]byte(expectedSignature), []byte(signature))
 }
 
 func GenerateTicketQR(c *gin.Context) {
@@ -53,23 +87,20 @@ func GenerateTicketQR(c *gin.Context) {
 		return
 	}
 
+	if purchase.IsUsed {
+		helpers.RespondWithError(c, http.StatusForbidden, "Ticket already used")
+		return
+	}
+
 	qrData := generateQRCodeData(&purchase)
 
-	qrImage, err := qrcode.Encode(qrData, qrcode.Medium, 1444)
+	qrImage, err := qrcode.Encode(qrData, qrcode.Medium, 256)
 	if err != nil {
 		helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to generate QR code")
 		return
 	}
 
 	c.Data(http.StatusOK, "image/png", qrImage)
-}
-
-func extractPurchaseIDFromQRData(qrData string) (uuid.UUID, error) {
-	parts := strings.Split(qrData, ":")
-	if len(parts) != 6 || parts[0] != "purchase" {
-		return uuid.Nil, fmt.Errorf("invalid QR data format")
-	}
-	return uuid.Parse(parts[1])
 }
 
 func ValidateTicket(c *gin.Context) {
@@ -106,13 +137,13 @@ func ValidateTicket(c *gin.Context) {
 		return
 	}
 
-	if purchase.Ticket.Event.UserID != userID {
-		helpers.RespondWithError(c, http.StatusForbidden, "You don't have permission to validate this ticket")
+	if !validateQRCodeSignature(&purchase, validationRequest.QRData) {
+		helpers.RespondWithError(c, http.StatusForbidden, "Invalid QR code signature")
 		return
 	}
 
-	if validationRequest.QRData != generateQRCodeData(&purchase) {
-		helpers.RespondWithError(c, http.StatusForbidden, "Invalid QR code")
+	if purchase.Ticket.Event.UserID != userID {
+		helpers.RespondWithError(c, http.StatusForbidden, "You don't have permission to validate this ticket")
 		return
 	}
 
