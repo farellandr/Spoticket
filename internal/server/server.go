@@ -82,8 +82,8 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 		{
 			profileProtected.GET("", handlers.GetProfile)
 			profileProtected.PUT("/update", handlers.EditProfile)
-			profileProtected.POST("/remove-picture", handlers.RemoveProfilePicture)
 			profileProtected.PUT("/change-password", handlers.ChangePassword)
+			profileProtected.DELETE("/remove-picture", handlers.RemoveProfilePicture)
 		}
 
 		categoryProtected := protected.Group("/categories")
