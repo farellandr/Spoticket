@@ -76,6 +76,7 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 		profileProtected := protected.Group("/profile")
 		{
 			profileProtected.GET("", handlers.GetProfile)
+			profileProtected.PUT("/update", handlers.EditProfile)
 			profileProtected.PUT("/change-password", handlers.ChangePassword)
 		}
 

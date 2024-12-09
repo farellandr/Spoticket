@@ -15,6 +15,11 @@ type ChangePasswordRequest struct {
 	NewPassword string `json:"new_password" binding:"required"`
 }
 
+type EditProfileRequest struct {
+	Name        string `json:"name" binding:"required"`
+	PhoneNumber string `json:"phone_number" binding:"required,min=10,max=13"`
+}
+
 func GetProfile(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -88,5 +93,44 @@ func ChangePassword(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Password updated successfully.",
+	})
+}
+
+func EditProfile(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		helpers.RespondWithError(c, http.StatusUnauthorized, "User ID not found in token.")
+		return
+	}
+
+	var req EditProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		helpers.RespondWithError(c, http.StatusBadRequest, "Invalid input. Please check your fields.")
+		return
+	}
+
+	db, exists := c.Get("db")
+	if !exists {
+		helpers.RespondWithError(c, http.StatusInternalServerError, "Database connection not found.")
+		return
+	}
+	gormDB := db.(*gorm.DB)
+
+	var user models.User
+	if err := gormDB.Where("id = ?", userID).First(&user).Error; err != nil {
+		helpers.RespondWithError(c, http.StatusUnauthorized, "You have no permission to change this user's password.")
+		return
+	}
+
+	user.Name = req.Name
+	user.PhoneNumber = req.PhoneNumber
+
+	if err := gormDB.Save(&user).Error; err != nil {
+		helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to update password.")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Profile updated successfully.",
 	})
 }
