@@ -41,6 +41,11 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 		public.POST("/register", handlers.Register)
 		public.POST("/login", handlers.Login)
 
+		profilePublic := public.Group("/profile")
+		{
+			profilePublic.GET("/picture/:id", handlers.StreamProfilePicture)
+		}
+
 		categoryPublic := public.Group("/categories")
 		{
 			categoryPublic.GET("", handlers.ListCategories)
@@ -77,6 +82,7 @@ func setupRoutes(r *gin.Engine, db *gorm.DB) {
 		{
 			profileProtected.GET("", handlers.GetProfile)
 			profileProtected.PUT("/update", handlers.EditProfile)
+			profileProtected.POST("/remove-picture", handlers.RemoveProfilePicture)
 			profileProtected.PUT("/change-password", handlers.ChangePassword)
 		}
 
