@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/farellandr/spoticket/internal/models"
+	"github.com/xendit/xendit-go/v6"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -25,6 +26,24 @@ func LoadConfig() (*Config, error) {
 		DBPassword: os.Getenv("DB_PASSWORD"),
 		DBName:     os.Getenv("DB_NAME"),
 	}, nil
+}
+
+type XenditConfig struct {
+	SecretKey string
+	PublicKey string
+}
+
+func LoadXenditConfig() (*XenditConfig, error) {
+	return &XenditConfig{
+		SecretKey: os.Getenv("XENDIT_SECRET_KEY"),
+		PublicKey: os.Getenv("XENDIT_PUBLIC_KEY"),
+	}, nil
+}
+
+func InitXenditClient(config *XenditConfig) (*xendit.APIClient, error) {
+	client := xendit.NewClient(config.SecretKey)
+
+	return client, nil
 }
 
 func enableUUIDExtension(db *gorm.DB) error {

@@ -8,23 +8,34 @@ import (
 	"github.com/farellandr/spoticket/internal/handlers"
 	"github.com/farellandr/spoticket/internal/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/xendit/xendit-go/v6"
 	"gorm.io/gorm"
 )
 
 func Start() error {
-	cfg, err := config.LoadConfig()
+	dbCfg, err := config.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %v", err)
 	}
 
-	db, err := config.InitDatabase(cfg)
+	db, err := config.InitDatabase(dbCfg)
 	if err != nil {
 		return fmt.Errorf("failed to initialize database: %v", err)
 	}
 
+	xndCfg, err := config.LoadXenditConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load Xendit config: %v", err)
+	}
+
+	xnd, err := config.InitXenditClient(xndCfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize Xendit client: %v", err)
+	}
+
 	r := gin.Default()
 
-	setupRoutes(r, db)
+	setupRoutes(r, db, xnd)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -33,8 +44,9 @@ func Start() error {
 	return r.Run(":" + port)
 }
 
-func setupRoutes(r *gin.Engine, db *gorm.DB) {
+func setupRoutes(r *gin.Engine, db *gorm.DB, xnd *xendit.APIClient) {
 	r.Use(middleware.DatabaseMiddleware(db))
+	r.Use(middleware.XenditMiddleware(xnd))
 
 	public := r.Group("/v1")
 	{
