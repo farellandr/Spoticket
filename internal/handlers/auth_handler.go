@@ -16,11 +16,13 @@ import (
 )
 
 type RegisterRequest struct {
-	Email       string `json:"email" binding:"required,email"`
-	Password    string `json:"password" binding:"required,min=6"`
-	Name        string `json:"name" binding:"required"`
-	PhoneNumber string `json:"phone_number" binding:"required,min=10,max=13"`
-	RoleName    string `json:"role_name" binding:"required"`
+	Email          string  `json:"email" binding:"required,email"`
+	Password       string  `json:"password" binding:"required,min=6"`
+	Name           string  `json:"name" binding:"required"`
+	PhoneNumber    string  `json:"phone_number" binding:"required,min=10,max=13"`
+	AccountChannel *string `json:"account_channel"`
+	AccountNumber  *string `json:"account_number"`
+	RoleName       string  `json:"role_name" binding:"required"`
 }
 
 type LoginRequest struct {
@@ -67,6 +69,18 @@ func Register(c *gin.Context) {
 		PhoneNumber: req.PhoneNumber,
 		Password:    string(hashedPassword),
 		RoleID:      role.ID,
+		Role:        &role,
+	}
+
+	if req.AccountChannel != nil {
+		user.AccountChannel = req.AccountChannel
+	}
+	if req.AccountNumber != nil {
+		if len(*req.AccountNumber) < 10 {
+			helpers.RespondWithError(c, http.StatusBadRequest, "Account number must be at least 10 characters.")
+			return
+		}
+		user.AccountNumber = req.AccountNumber
 	}
 
 	if err := gormDB.Create(&user).Error; err != nil {

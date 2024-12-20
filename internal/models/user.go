@@ -19,6 +19,8 @@ type User struct {
 	Purchases      []Purchase `gorm:"foreignKey:UserID"`
 	Payments       []Payment  `gorm:"foreignKey:UserID"`
 	Coupons        []Coupon   `gorm:"many2many:user_coupons;"`
+	AccountNumber  *string
+	AccountChannel *string
 	ProfilePicture *string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
