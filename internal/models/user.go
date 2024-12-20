@@ -21,6 +21,7 @@ type User struct {
 	Coupons        []Coupon   `gorm:"many2many:user_coupons;"`
 	AccountNumber  *string
 	AccountChannel *string
+	AccountName    *string
 	ProfilePicture *string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time

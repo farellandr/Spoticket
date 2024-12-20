@@ -22,6 +22,7 @@ type RegisterRequest struct {
 	PhoneNumber    string  `json:"phone_number" binding:"required,min=10,max=13"`
 	AccountChannel *string `json:"account_channel"`
 	AccountNumber  *string `json:"account_number"`
+	AccountName    *string `json:"account_name"`
 	RoleName       string  `json:"role_name" binding:"required"`
 }
 
@@ -72,6 +73,9 @@ func Register(c *gin.Context) {
 		Role:        &role,
 	}
 
+	if req.AccountName != nil {
+		user.AccountName = req.AccountName
+	}
 	if req.AccountChannel != nil {
 		user.AccountChannel = req.AccountChannel
 	}
