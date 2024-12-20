@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/xendit/xendit-go/v6/invoice"
+	"github.com/xendit/xendit-go/v6/payout"
 	"gorm.io/gorm"
 )
 
@@ -165,6 +166,12 @@ func PaymentNotification(c *gin.Context) {
 	}
 	gormDB := db.(*gorm.DB)
 
+	xenditClient := middleware.GetXenditClient(c)
+	if xenditClient == nil {
+		helpers.RespondWithError(c, http.StatusInternalServerError, "Xendit client not initialized.")
+		return
+	}
+
 	var payload *invoice.InvoiceCallback
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		helpers.RespondWithError(c, http.StatusBadRequest, "Invalid notification payload.")
@@ -187,8 +194,8 @@ func PaymentNotification(c *gin.Context) {
 		return
 	}
 
-	ticketID, couponID, err := helpers.ExtractTicketID(payload.ExternalId)
-	if err != nil {
+	ticketID, couponID, extErr := helpers.ExtractTicketID(payload.ExternalId)
+	if extErr != nil {
 		helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to extract IDs from external ID.")
 		return
 	}
@@ -202,10 +209,13 @@ func PaymentNotification(c *gin.Context) {
 		TransactionID: payload.ExternalId,
 	}
 
-	err = gormDB.Transaction(func(tx *gorm.DB) error {
+	var paymentId uuid.UUID
+	err := gormDB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&payment).Error; err != nil {
 			return err
 		}
+
+		paymentId = payment.ID
 
 		for _, item := range payload.Items {
 			for i := 0; i < int(item.Quantity); i++ {
@@ -238,4 +248,41 @@ func PaymentNotification(c *gin.Context) {
 		})
 		return
 	}
+
+	totalFee := float64(0)
+	for _, fee := range payload.Fees {
+		totalFee += float64(fee.Value)
+	}
+
+	idempotencyKey := fmt.Sprintf("disb-%s", uuid.New().String())
+	payoutRequest := *payout.NewCreatePayoutRequest(
+		fmt.Sprintf("disb-%s", paymentId),
+		"ID_BCA",
+		payout.DigitalPayoutChannelProperties{
+			AccountHolderName: *payout.NewNullableString(payload.PayerEmail),
+			AccountNumber:     "1234567890",
+		},
+		float32(payload.Amount-totalFee),
+		"IDR",
+	)
+
+	resp, r, respErr := xenditClient.PayoutApi.CreatePayout(context.Background()).
+		IdempotencyKey(idempotencyKey).
+		CreatePayoutRequest(payoutRequest).
+		Execute()
+
+	if respErr != nil {
+		fmt.Fprintf(os.Stderr, "Error when calling `PayoutApi.CreatePayout``: %v\n", err)
+
+		b, _ := json.Marshal(err)
+		fmt.Fprintf(os.Stderr, "Full Error Struct: %v\n", string(b))
+
+		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+		helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to create payout.")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Payment created to channel: %s", resp.Payout.ChannelCode),
+	})
 }
