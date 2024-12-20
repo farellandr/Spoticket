@@ -9,7 +9,6 @@ import (
 
 type Purchase struct {
 	ID        uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primary_key"`
-	Total     int       `gorm:"not null"`
 	IsUsed    bool      `gorm:"not null;default:false"`
 	TicketID  uuid.UUID `gorm:"type:uuid;not null;index"`
 	Ticket    *Ticket   `gorm:"foreignKey:TicketID"`

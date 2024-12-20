@@ -2,10 +2,8 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -143,14 +141,10 @@ func CreatePaymentLink(c *gin.Context) {
 		},
 	}
 
-	resp, r, err := xenditClient.InvoiceApi.CreateInvoice(context.Background()).CreateInvoiceRequest(invoiceRequest).Execute()
+	resp, _, err := xenditClient.InvoiceApi.CreateInvoice(context.Background()).CreateInvoiceRequest(invoiceRequest).Execute()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `InvoiceApi.CreateInvoice``: %v\n", err.Error())
-
-		b, _ := json.Marshal(err.FullError())
-		fmt.Fprintf(os.Stderr, "Full Error Struct: %v\n", string(b))
-
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+		helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to create payment link.")
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -184,105 +178,91 @@ func PaymentNotification(c *gin.Context) {
 		})
 	}
 
-	var user models.User
-	if err := gormDB.Where("email = ?", payload.PayerEmail).First(&user).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	if payload.Status == "PAID" {
+		var user models.User
+		if err := gormDB.Where("email = ?", payload.PayerEmail).First(&user).Error; err != nil {
 			helpers.RespondWithError(c, http.StatusNotFound, "User not found.")
 			return
 		}
-		helpers.RespondWithError(c, http.StatusInternalServerError, "Error retrieving user.")
-		return
-	}
 
-	ticketID, couponID, extErr := helpers.ExtractTicketID(payload.ExternalId)
-	if extErr != nil {
-		helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to extract IDs from external ID.")
-		return
-	}
-
-	payment := models.Payment{
-		Amount:        int(payload.Amount),
-		Method:        *payload.PaymentMethod,
-		Status:        payload.Status,
-		UserID:        user.ID,
-		CouponID:      couponID,
-		TransactionID: payload.ExternalId,
-	}
-
-	var paymentId uuid.UUID
-	err := gormDB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&payment).Error; err != nil {
-			return err
+		ticketID, couponID, _ := helpers.ExtractTicketID(payload.ExternalId)
+		if ticketID == uuid.Nil {
+			helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to extract IDs from external ID.")
+			return
 		}
 
-		paymentId = payment.ID
+		payment := models.Payment{
+			Amount:        int(payload.Amount),
+			Method:        *payload.PaymentMethod,
+			Status:        payload.Status,
+			UserID:        user.ID,
+			CouponID:      couponID,
+			TransactionID: payload.ExternalId,
+		}
+
+		if err := gormDB.Create(&payment).Error; err != nil {
+			helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to create payment.")
+			return
+		}
 
 		for _, item := range payload.Items {
 			for i := 0; i < int(item.Quantity); i++ {
 				purchase := models.Purchase{
-					Total:     int(item.Price) / int(item.Quantity),
 					TicketID:  ticketID,
 					UserID:    payment.UserID,
 					PaymentID: payment.ID,
 					IsUsed:    false,
 				}
 
-				if err := tx.Create(&purchase).Error; err != nil {
-					return err
+				if err := gormDB.Create(&purchase).Error; err != nil {
+					helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to create purchase.")
+					return
 				}
 			}
 		}
 
 		if couponID != nil {
-			return tx.Model(&models.UserCoupon{}).
-				Where("user_id = ? AND coupon_id = ?", user.ID, *couponID).
-				Update("is_used", true).Error
+			if err := gormDB.Model(&models.UserCoupon{}).Where("user_id = ? AND coupon_id = ?", user.ID, *couponID).Update("is_used", true).Error; err != nil {
+				helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to update user coupon.")
+				return
+			}
 		}
 
-		return nil
-	})
+		var Ticket models.Ticket
+		if err := gormDB.Preload("Event.User").Where("id = ?", ticketID).First(&Ticket).Error; err != nil {
+			helpers.RespondWithError(c, http.StatusNotFound, "Ticket not found.")
+			return
+		}
 
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to create payment and purchases",
+		totalFee := float64(0)
+		for _, fee := range payload.Fees {
+			totalFee += float64(fee.Value)
+		}
+
+		idempotencyKey := fmt.Sprintf("disb-%s", uuid.New().String())
+		payoutRequest := *payout.NewCreatePayoutRequest(
+			fmt.Sprintf("disb-%s", payment.ID),
+			*Ticket.Event.User.AccountChannel,
+			payout.DigitalPayoutChannelProperties{
+				AccountHolderName: *payout.NewNullableString(Ticket.Event.User.AccountName),
+				AccountNumber:     *Ticket.Event.User.AccountNumber,
+			},
+			float32(payload.Amount-totalFee),
+			"IDR",
+		)
+
+		resp, _, err := xenditClient.PayoutApi.CreatePayout(context.Background()).
+			IdempotencyKey(idempotencyKey).
+			CreatePayoutRequest(payoutRequest).
+			Execute()
+
+		if err != nil {
+			helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to create payout.")
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": fmt.Sprintf("Payment created to channel: %s", resp.Payout.ChannelCode),
 		})
-		return
 	}
-
-	totalFee := float64(0)
-	for _, fee := range payload.Fees {
-		totalFee += float64(fee.Value)
-	}
-
-	idempotencyKey := fmt.Sprintf("disb-%s", uuid.New().String())
-	payoutRequest := *payout.NewCreatePayoutRequest(
-		fmt.Sprintf("disb-%s", paymentId),
-		"ID_BCA",
-		payout.DigitalPayoutChannelProperties{
-			AccountHolderName: *payout.NewNullableString(payload.PayerEmail),
-			AccountNumber:     "1234567890",
-		},
-		float32(payload.Amount-totalFee),
-		"IDR",
-	)
-
-	resp, r, respErr := xenditClient.PayoutApi.CreatePayout(context.Background()).
-		IdempotencyKey(idempotencyKey).
-		CreatePayoutRequest(payoutRequest).
-		Execute()
-
-	if respErr != nil {
-		fmt.Fprintf(os.Stderr, "Error when calling `PayoutApi.CreatePayout``: %v\n", err)
-
-		b, _ := json.Marshal(err)
-		fmt.Fprintf(os.Stderr, "Full Error Struct: %v\n", string(b))
-
-		fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
-		helpers.RespondWithError(c, http.StatusInternalServerError, "Failed to create payout.")
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Payment created to channel: %s", resp.Payout.ChannelCode),
-	})
 }
