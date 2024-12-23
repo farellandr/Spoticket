@@ -30,6 +30,11 @@ func CreatePaymentLink(c *gin.Context) {
 		return
 	}
 
+	if paymentReq.Quantity < 1 {
+		helpers.RespondWithError(c, http.StatusBadRequest, "Quantity must be at least 1.")
+		return
+	}
+
 	userID, exists := c.Get("user_id")
 	if !exists {
 		helpers.RespondWithError(c, http.StatusUnauthorized, "User ID not found in token.")
@@ -55,8 +60,18 @@ func CreatePaymentLink(c *gin.Context) {
 	gormDB := db.(*gorm.DB)
 
 	var ticket models.Ticket
-	if err := gormDB.Preload("Event.Categories").First(&ticket, paymentReq.TicketID).Error; err != nil {
+	if err := gormDB.Preload("Event.Categories").Preload("Purchases").First(&ticket, paymentReq.TicketID).Error; err != nil {
 		helpers.RespondWithError(c, http.StatusNotFound, "Ticket not found.")
+		return
+	}
+
+	if time.Now().After(ticket.Event.EndTime) {
+		helpers.RespondWithError(c, http.StatusForbidden, "Ticket expired")
+		return
+	}
+
+	if len(ticket.Purchases) > ticket.Limit || paymentReq.Quantity+len(ticket.Purchases) > ticket.Limit {
+		helpers.RespondWithError(c, http.StatusBadRequest, "Ticket limit exceeded.")
 		return
 	}
 

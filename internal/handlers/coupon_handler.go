@@ -32,6 +32,11 @@ func CreateCoupon(c *gin.Context) {
 		return
 	}
 
+	if req.Limit < 1 {
+		helpers.RespondWithError(c, http.StatusBadRequest, "Limit must be at least 1.")
+		return
+	}
+
 	db, exists := c.Get("db")
 	if !exists {
 		helpers.RespondWithError(c, http.StatusInternalServerError, "Database connection not found.")
@@ -209,6 +214,11 @@ func UpdateCoupon(c *gin.Context) {
 	var req CouponRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		helpers.RespondWithError(c, http.StatusBadRequest, "Invalid input. Please check your fields.")
+		return
+	}
+
+	if req.Limit < 1 {
+		helpers.RespondWithError(c, http.StatusBadRequest, "Limit must be at least 1.")
 		return
 	}
 

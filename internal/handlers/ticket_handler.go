@@ -13,7 +13,7 @@ import (
 type TicketRequest struct {
 	Type    string    `json:"type" binding:"required"`
 	Price   int       `json:"price" binding:"required"`
-	Limit   *int      `json:"limit"`
+	Limit   int       `json:"limit"`
 	EventID uuid.UUID `json:"event_id" binding:"required"`
 }
 
@@ -21,6 +21,11 @@ func CreateTicket(c *gin.Context) {
 	var req TicketRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		helpers.RespondWithError(c, http.StatusBadRequest, "Invalid input. Please check your fields.")
+		return
+	}
+
+	if req.Limit < 1 {
+		helpers.RespondWithError(c, http.StatusBadRequest, "Limit must be at least 1.")
 		return
 	}
 
@@ -94,6 +99,11 @@ func UpdateTicket(c *gin.Context) {
 	var req TicketRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		helpers.RespondWithError(c, http.StatusBadRequest, "Invalid input. Please check your fields.")
+		return
+	}
+
+	if req.Limit < 1 {
+		helpers.RespondWithError(c, http.StatusBadRequest, "Limit must be at least 1.")
 		return
 	}
 

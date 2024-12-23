@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/farellandr/spoticket/internal/helpers"
 	"github.com/farellandr/spoticket/internal/models"
@@ -79,6 +80,16 @@ func GenerateTicketQR(c *gin.Context) {
 	var purchase models.Purchase
 	if err := gormDB.Preload("Ticket.Event").First(&purchase, purchaseID).Error; err != nil {
 		helpers.RespondWithError(c, http.StatusNotFound, "Purchase not found")
+		return
+	}
+
+	if purchase.Payment.Status != "PAID" {
+		helpers.RespondWithError(c, http.StatusForbidden, "Payment is not paid")
+		return
+	}
+
+	if time.Now().After(purchase.Ticket.Event.EndTime) {
+		helpers.RespondWithError(c, http.StatusForbidden, "Ticket expired")
 		return
 	}
 

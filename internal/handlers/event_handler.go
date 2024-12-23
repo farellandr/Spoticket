@@ -63,8 +63,13 @@ func CreateEvent(c *gin.Context) {
 	gormDB := db.(*gorm.DB)
 
 	var user models.User
-	if err := gormDB.Where("id = ?", userID).First(&user).Error; err != nil {
+	if err := gormDB.Where("id = ?", userID).Preload("Role").First(&user).Error; err != nil {
 		helpers.RespondWithError(c, http.StatusNotFound, "User not found.")
+		return
+	}
+
+	if user.Role.Name != "organizer" {
+		helpers.RespondWithError(c, http.StatusUnauthorized, "You have no permission to create an event.")
 		return
 	}
 
