@@ -50,6 +50,9 @@ func setupRoutes(r *gin.Engine, db *gorm.DB, xnd *xendit.APIClient) {
 
 	public := r.Group("/v1")
 	{
+		public.GET("/health", func(ctx *gin.Context) {
+			ctx.JSON(200, gin.H{"status": "ok"})
+		})
 		public.POST("/register", handlers.Register)
 		public.POST("/login", handlers.Login)
 
